@@ -37,9 +37,9 @@ import javax.tools.JavaFileObject;
 @SupportedAnnotationTypes("com.example.InjectView")
 @SupportedSourceVersion(SourceVersion.RELEASE_7)
 public class ViewInjectorProcessor extends AbstractProcessor {
-    private static final String GEN_CLASS_SUFFIX = "Injector";
+    private static final String GEN_CLASS_SUFFIX = "$Injector";
     private static final String INJECTOR_NAME = "ViewInjector";
-
+    private static final String TAG = "ViewInjectorProcessor";
     private Types mTypeUtils;
     private Elements mElementUtils;
     private Filer mFiler;
@@ -57,33 +57,37 @@ public class ViewInjectorProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+//        使用了@InjectView注解的元素
         Set<? extends Element> mElementsAnnotatedWith = roundEnv.getElementsAnnotatedWith(InjectView.class);
         if (mElementsAnnotatedWith.size() == 0) return true;
         Map<Element, List<Element>> elemtMap = new HashMap<>();
         StringBuffer buffer = new StringBuffer();
+//        构建注解类
         buffer.append("package com.example;\n")
                 .append("public class " + INJECTOR_NAME + "{\n");
-        for (Element mElement :
-                mElementsAnnotatedWith) {
+        for (Element mElement : mElementsAnnotatedWith) {
             if (!isView(mElement.asType())) {
                 mMessager.printMessage(Diagnostic.Kind.ERROR, "is not a View ", mElement);
             }
             Element clazz = mElement.getEnclosingElement();
             addElment(elemtMap, clazz, mElement);
         }
-        for (Map.Entry<Element, List<Element>> entry :
-                elemtMap.entrySet()) {
+        System.out.println(TAG+elemtMap);
+//        遍历elemtmap，即遍历所有的注解类
+        for (Map.Entry<Element, List<Element>> entry : elemtMap.entrySet()) {
             Element clazz = entry.getKey();
             String classname = clazz.getSimpleName().toString();
             String packageName = mElementUtils.getPackageOf(clazz).asType().toString();
             generateInjectorCode(packageName, classname, entry.getValue());
             String fullName = clazz.asType().toString();
+//            拼接ViewInjector的inject方法代码
             buffer.append("\tpublic static void inject(" + fullName + " arg){\n")
                     .append("\t\t" + fullName + GEN_CLASS_SUFFIX + ".inject(arg);\n")
                     .append("\t}\n");
 
         }
         buffer.append("}");
+//        生成ViewInjector类
         generateCode(INJECTOR_NAME, buffer.toString());
         return true;
     }
@@ -105,7 +109,7 @@ public class ViewInjectorProcessor extends AbstractProcessor {
     }
 
     /**
-     * 生成注入器的代码
+     * 生成注入器的代码如MainActivity$Injector
      * @param mPackageName
      * @param mClassname
      * @param views
@@ -115,6 +119,7 @@ public class ViewInjectorProcessor extends AbstractProcessor {
         mBuilder.append("package " + mPackageName + ";\n\n")
                 .append("public class " + mClassname + GEN_CLASS_SUFFIX + "{\n")
                 .append("public static void inject(" + mClassname + " arg){\n");
+//        对每个View 遍历。生成findViewByid代码
         for (Element mElement : views) {
             String type = mElement.asType().toString();
             String name = mElement.getSimpleName().toString();
@@ -126,6 +131,12 @@ public class ViewInjectorProcessor extends AbstractProcessor {
         generateCode(mClassname + GEN_CLASS_SUFFIX, mBuilder.toString());
     }
 
+    /**
+     * 向mElemtMap中存入，elemt和List的键值对
+     * @param mElemtMap
+     * @param mClazz
+     * @param mElement
+     */
     private void addElment(Map<Element, List<Element>> mElemtMap, Element mClazz, Element mElement) {
         List<Element> list = mElemtMap.get(mClazz);
         if (list == null) {
@@ -134,7 +145,7 @@ public class ViewInjectorProcessor extends AbstractProcessor {
         }
         list.add(mElement);
     }
-
+//判断是否是View的子类
     private boolean isView(TypeMirror mTypeMirror) {
         List<? extends TypeMirror> supers = mTypeUtils.directSupertypes(mTypeMirror);
         if (supers.size() == 0) {
